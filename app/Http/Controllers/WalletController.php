@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\ApiResponse;
+use App\Helpers\Paystack;
+use App\Models\Transaction;
 use App\Models\Wallet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -9,29 +12,38 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 
+use function Laravel\Prompts\info;
+
 class WalletController extends Controller
 {
     public function deposit(Request $request)
     {
-        $amountInKobo = $request->amount * 100;
+
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:100', // Minimum deposit of 100 units
+        ]);
+        $amountInKobo = $data['amount'] * 100;
         $reference = Str::random(12);
         $user = $request->user();
 
         DB::beginTransaction();
         try {
-            // 1. Record pending transaction for idempotency
-            $user->wallet->transactions()->create([
-                'type' => 'deposit',
-                'amount' => $request->amount,
-                'reference' => $reference,
-                'status' => 'pending',
-            ]);
+            // // 1. Record pending transaction for idempotency
+            // $user->wallet->transactions()->create([
+            //     'type' => 'deposit',
+            //     'amount' => $request->amount,
+            //     'reference' => $reference,
+            //     'status' => 'pending',
+            // ]);
 
             // 2. Initialize Paystack
             $paystackData = [
+                'name' => $user->name,
                 'amount' => $amountInKobo,
                 'email' => $user->email,
                 'reference' => $reference,
+                'payment_id' => Str::uuid(),
+                // callback_url
                 'callback_url' => env('APP_URL') . '/api/wallet/paystack/webhook', // Optional: Paystack often prefers server-to-server webhook
                 'metadata' => [
                     'user_id' => $user->id,
@@ -39,6 +51,32 @@ class WalletController extends Controller
             ];
 
             // $response = Paystack::getAuthorizationUrl($paystackData)->toArray();
+            $PSP = Paystack::make($paystackData);
+
+            if ($PSP['success']) {
+                // 1. Record pending transaction for idempotency
+                $user->wallet->transactions()->create([
+                    'type' => 'deposit',
+                    'amount' => $data['amount'],
+                    'reference' => $PSP['reference'],
+                    'status' => 'pending',
+                ]);
+                // Payment link
+                $response = [
+                    'amount' => $data['amount'] ?? ($amountInKobo / 100),
+                    'reference' => $PSP['reference'],
+                    'authorization_url' => $PSP['authorization_url'],
+                ];
+
+                // commit transaction
+                DB::commit();
+
+                // return response
+                return ApiResponse::success($response, 'Dedicated payment link created successfully, please make payment to validate your deposit!', 201, $response);
+            } else {
+                info('payment initialization error: ' . $PSP['message']);
+                return ApiResponse::error([], 'Error: unable to initialize payment process!', 500);
+            }
             DB::commit();
 
             return response()->json([
@@ -53,9 +91,12 @@ class WalletController extends Controller
 
     public function handlePaystackWebhook(Request $request)
     {
+
+        info('Paystack Webhook Received: ' . $request->getContent());
+
         // 1. Signature Validation (Security)
         $paystackSignature = $request->header('x-paystack-signature');
-        $secret = config('paystack.secretKey');
+        $secret = config('services.paystack.secret');
 
         if ($paystackSignature !== hash_hmac('sha512', $request->getContent(), $secret)) {
             Log::warning('Paystack Webhook: Invalid Signature.', $request->all());
@@ -99,6 +140,7 @@ class WalletController extends Controller
         return response()->json(['status' => true]); // Always return 200 OK to Paystack
     }
 
+
     public function transfer(Request $request)
     {
         // ... validation for amount and wallet_number ...
@@ -138,5 +180,65 @@ class WalletController extends Controller
         });
 
         return response()->json(['status' => 'success', 'message' => 'Transfer completed']);
+    }
+
+
+    // verify deposit status
+    public function verifyPayment(Request $request)
+    {
+        $data = $request->validate([
+            'reference' => 'required|string',
+        ]);
+
+        $reference = $data['reference'];
+        $transaction = Transaction::where('reference', $reference)->first();
+
+        if (!$transaction) {
+            return ApiResponse::error([], 'Transaction not found.', 404);
+        }
+
+        $PSP = Paystack::verify($reference);
+        if (!$PSP['success']) {
+            return ApiResponse::error([], 'Transaction verification failed: ' . $PSP['message'], 500);
+        }
+
+        info('Paystack Verification Response: ' . json_encode($PSP));
+
+        $transaction->status = $PSP['data']['status'];
+        $transaction->save();
+
+        return ApiResponse::success([
+            'reference' => $transaction->reference,
+            'status' => $transaction->status,
+            'amount' => $transaction->amount,
+            'type' => $transaction->type,
+            'created_at' => $transaction->created_at,
+        ], 'Transaction retrieved successfully.', 200);
+    }
+
+
+    public function getBalance(Request $request)
+    {
+        $wallet = $request->user()->wallet;
+        return ApiResponse::success([
+            'balance' => $wallet->balance,
+            'currency' => 'NGN', // Assuming NGN, adjust as needed
+        ], 'Wallet balance retrieved successfully.', 200);
+    }
+
+
+    public function verifyDepositStatus($reference)
+    {
+        $transaction = Transaction::where('reference', $reference)->first();
+        if (!$transaction) {
+            return ApiResponse::error([], 'Transaction not found.', 404);
+        }
+        return ApiResponse::success([
+            'reference' => $transaction->reference,
+            'status' => $transaction->status,
+            'amount' => $transaction->amount,
+            'type' => $transaction->type,
+            'created_at' => $transaction->created_at,
+        ], 'Transaction retrieved successfully.', 200);
     }
 }
