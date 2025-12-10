@@ -95,7 +95,8 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('deposit/{reference}/status', 'verifyDepositStatus');
 
         // Check for 'transfer' permission for API Keys
-        Route::post('transfer', 'transfer')->middleware('ability:transfer');
+        // Route::post('transfer', 'transfer')->middleware('ability:transfer');
+        Route::post('transfer', 'transfer');
 
         // Check for 'read' permission for API Keys
         Route::get('balance', 'getBalance')->middleware('ability:read');
@@ -107,5 +108,6 @@ Route::middleware(['auth:api'])->group(function () {
 
 // paystack webhook
 Route::post('wallet/paystack/webhook', [WalletController::class, 'handlePaystackWebhook']);
+// verify transaction status
 Route::get('wallet/paystack/webhook', [WalletController::class, 'verifyPayment']);
 
