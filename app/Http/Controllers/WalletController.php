@@ -96,7 +96,9 @@ class WalletController extends Controller
         info('Paystack Webhook Received: ' . $request->getContent());
 
         // 1. Signature Validation (Security)
-        $paystackSignature = $request->header('x-paystack-signature');
+        // $paystackSignature = $request->header('x-paystack-signature');
+        $paystackSignature = $request->header('HTTP_X_PAYSTACK_SIGNATURE');
+
         $secret = config('services.paystack.secret');
 
         if ($paystackSignature !== hash_hmac('sha512', $request->getContent(), $secret)) {
@@ -116,6 +118,7 @@ class WalletController extends Controller
                 $transaction = Transaction::where('reference', $reference)->lockForUpdate()->first();
 
                 if (!$transaction || $transaction->status !== 'pending') {
+                    info('Transaction already processed or not found for reference: ' . $reference);
                     // Already processed (idempotency), or transaction not found/invalid.
                     DB::commit(); // Always acknowledge 200 OK to Paystack
                     return response()->json(['status' => true]);
@@ -128,6 +131,7 @@ class WalletController extends Controller
                 $wallet = $transaction->wallet()->lockForUpdate()->first();
                 $wallet->balance += $data['amount'] / 100; // Amount is in kobo/cent
                 $wallet->save();
+                info('Wallet credited with amount: ' . ($data['amount'] / 100) . ' for reference: ' . $reference);
 
                 DB::commit();
                 Log::info("Wallet credited successfully for reference: " . $reference);
@@ -166,7 +170,7 @@ class WalletController extends Controller
             // 1. Debit Sender
             $senderWallet->decrement('balance', $amount);
             $senderWallet->transactions()->create([
-                'type' => 'transfer_out',
+                'type' => 'transfer',
                 'amount' => $amount,
                 'reference' => $reference . date('YmdHis'),
                 'recipient_wallet_id' => $recipientWallet->id,
@@ -176,7 +180,7 @@ class WalletController extends Controller
             // 2. Credit Recipient
             $recipientWallet->increment('balance', $amount);
             $recipientWallet->transactions()->create([
-                'type' => 'transfer_in',
+                'type' => 'receive',
                 'amount' => $amount,
                 'reference' => $reference . date('YmdHis') . rand(100, 999),
                 'recipient_wallet_id' => $senderWallet->id, // Store sender's wallet for history
@@ -238,6 +242,14 @@ class WalletController extends Controller
             'balance' => $wallet->balance,
             'currency' => 'NGN', // Assuming NGN, adjust as needed
         ], 'Wallet balance retrieved successfully.', 200);
+    }
+
+    public function getTransactions(Request $request)
+    {
+        $wallet = $request->user()->wallet;
+        $transactions = $wallet->transactions()->orderBy('created_at', 'desc')->get();
+
+        return ApiResponse::success($transactions, 'Transaction history retrieved successfully.', 200);
     }
 
 
