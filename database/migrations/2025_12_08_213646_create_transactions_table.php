@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('wallet_id')->constrained();
-            $table->enum('type', ['deposit', 'transfer_in', 'transfer_out']);
+            $table->enum('type', ['deposit', 'receive', 'transfer']);
             $table->decimal('amount', 15, 2);
             $table->string('reference')->unique(); // For Paystack/Idempotency
             $table->string('recipient_wallet_id')->nullable(); // For transfers
