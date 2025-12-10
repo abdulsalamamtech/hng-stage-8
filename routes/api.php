@@ -104,7 +104,6 @@ Route::middleware(['auth:api'])->group(function () {
 
         // Route::get('transactions', 'getTransactions')->middleware('ability:read');
         Route::get('transactions', 'getTransactions');
-
     });
 });
 
@@ -114,4 +113,3 @@ Route::middleware(['auth:api'])->group(function () {
 Route::post('wallet/paystack/webhook', [WalletController::class, 'handlePaystackWebhook']);
 // verify transaction status
 Route::get('wallet/paystack/webhook', [WalletController::class, 'verifyPayment']);
-
