@@ -9,6 +9,7 @@
 
 ## Project
 
+![](./docs/images/submission-image%202025-12-09%2023-49-24.png)
 ![](./docs/images/pass-test-image.png)
 
 On this week HNG project I built in Laravel.
@@ -92,7 +93,7 @@ Service-to-Service Access (API Keys / Sanctum)
 | 1.  | Create Key | /api/keys/create           | POST   | Authorization: Bearer <JWT_TOKEN> | {"name": "ServiceName", "expires_in_days": 30} | "name, email, password" |
 | 2.  | Login      | /api/keys/{tokenId}/revoke | DELETE | Authorization: Bearer <JWT_TOKEN> |                                                |                         | tokenId         |
 
--   Test documentation on [POSTMAN](https://www.postman.com/sdnss2/workspace/hng/collection/29774611-a35e1001-960c-411c-bf35-39576368d478?action=share&source=copy-link&creator=29774611)
+-   Test documentation on [POSTMAN](https://www.postman.com/sdnss2/workspace/hng/collection)
 
 ## My Workings
 
@@ -114,6 +115,11 @@ php artisan install:api
 
 # AuthComposer
 php artisan make:controller AuthController
+
+# Install Socialite
+# Guide: https://laravel-news.com/connecting-laravel-socialite-with-google-client-php-library
+composer create-project laravel/laravel google
+composer require laravel/socialite
 ```
 
 ## Setting up dev to prod
