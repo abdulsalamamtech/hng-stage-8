@@ -93,7 +93,7 @@ class WalletController extends Controller
     public function handlePaystackWebhook(Request $request)
     {
         // Timestamp the webhook receipt
-        info('Paystack Webhook Timestamp: ' . now()->toDateTimeString());
+        info('Paystack Webhook Timestamp: ' . now());
         info('Request all: ' . json_encode($request->all()));
         info('Paystack Webhook Received: ' . $request->getContent());
 
