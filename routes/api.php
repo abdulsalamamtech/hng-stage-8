@@ -78,7 +78,7 @@ Route::controller(AuthController::class)->prefix('auth')->group(function () {
 Route::post('wallet/paystack/webhook', [WalletController::class, 'handlePaystackWebhook']);
 
 // 3. Protected Routes (Use auth:sanctum which handles both JWT and API Key)
-Route::middleware(['auth:sanctum'])->group(function () {
+Route::middleware(['auth:api'])->group(function () {
 
     // API Key Management (User access only - implied by auth:sanctum user model)
     Route::prefix('keys')->controller(KeyController::class)->group(function () {
@@ -90,7 +90,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Wallet Endpoints (Requires permission checks for API keys)
     Route::controller(WalletController::class)->prefix('wallet')->group(function () {
         // Check for 'deposit' permission for API Keys
-        Route::post('deposit', 'deposit')->middleware('ability:deposit');
+        // Route::post('deposit', 'deposit')->middleware('ability:deposit');
+        Route::post('deposit', 'deposit');
         Route::get('deposit/{reference}/status', 'verifyDepositStatus');
 
         // Check for 'transfer' permission for API Keys
@@ -101,3 +102,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('transactions', 'getTransactions')->middleware('ability:read');
     });
 });
+
+
+
+// paystack webhook
+Route::post('wallet/paystack/webhook', [WalletController::class, 'handlePaystackWebhook']);
+Route::get('wallet/paystack/webhook', [WalletController::class, 'verifyPayment']);
+
