@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 
 use function Laravel\Prompts\info;
+use function Symfony\Component\Clock\now;
 
 class WalletController extends Controller
 {
@@ -144,6 +145,10 @@ class WalletController extends Controller
     public function transfer(Request $request)
     {
         // ... validation for amount and wallet_number ...
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:10', // Minimum transfer of 100 units
+            'wallet_number' => 'required|exists:wallets,id', // Assuming wallet_number maps to wallet id
+        ]);
 
         $senderWallet = $request->user()->wallet;
         $recipientWallet = Wallet::where('id', $request->wallet_number)->first();
@@ -151,10 +156,10 @@ class WalletController extends Controller
         $reference = Str::uuid(); // Unique reference for the transfer pair
 
         if (!$recipientWallet) {
-            return response()->json(['error' => 'Recipient wallet not found.'], 404);
+            return ApiResponse::error([], 'Recipient wallet not found.', 404);
         }
         if ($senderWallet->balance < $amount) {
-            return response()->json(['error' => 'Insufficient balance.'], 403);
+            return ApiResponse::error([], 'Insufficient balance.', 403);
         }
 
         DB::transaction(function () use ($senderWallet, $recipientWallet, $amount, $reference) {
@@ -163,7 +168,7 @@ class WalletController extends Controller
             $senderWallet->transactions()->create([
                 'type' => 'transfer_out',
                 'amount' => $amount,
-                'reference' => $reference,
+                'reference' => $reference . date('YmdHis'),
                 'recipient_wallet_id' => $recipientWallet->id,
                 'status' => 'success',
             ]);
@@ -173,13 +178,20 @@ class WalletController extends Controller
             $recipientWallet->transactions()->create([
                 'type' => 'transfer_in',
                 'amount' => $amount,
-                'reference' => $reference,
+                'reference' => $reference . date('YmdHis') . rand(100, 999),
                 'recipient_wallet_id' => $senderWallet->id, // Store sender's wallet for history
                 'status' => 'success',
             ]);
         });
 
-        return response()->json(['status' => 'success', 'message' => 'Transfer completed']);
+        $response = [
+            'amount' => $amount,
+            'reference' => $reference,
+            'sender_wallet_balance' => $senderWallet->balance,
+        ];
+
+        // return response()->json(['status' => 'success', 'message' => 'Transfer completed']);
+        return ApiResponse::success($response, 'Transfer completed successfully.', 200);
     }
 
 
@@ -207,13 +219,15 @@ class WalletController extends Controller
         $transaction->status = $PSP['data']['status'];
         $transaction->save();
 
-        return ApiResponse::success([
+        $response = [
             'reference' => $transaction->reference,
             'status' => $transaction->status,
             'amount' => $transaction->amount,
             'type' => $transaction->type,
             'created_at' => $transaction->created_at,
-        ], 'Transaction retrieved successfully.', 200);
+        ];
+
+        return ApiResponse::success($response, 'Transaction retrieved successfully.', 200);
     }
 
 
