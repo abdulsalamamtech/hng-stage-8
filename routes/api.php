@@ -99,8 +99,12 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('transfer', 'transfer');
 
         // Check for 'read' permission for API Keys
-        Route::get('balance', 'getBalance')->middleware('ability:read');
-        Route::get('transactions', 'getTransactions')->middleware('ability:read');
+        // Route::get('balance', 'getBalance')->middleware('ability:read');
+        Route::get('balance', 'getBalance');
+
+        // Route::get('transactions', 'getTransactions')->middleware('ability:read');
+        Route::get('transactions', 'getTransactions');
+
     });
 });
 
