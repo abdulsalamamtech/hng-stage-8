@@ -110,6 +110,6 @@ Route::middleware(['auth:api'])->group(function () {
 
 
 // paystack webhook
-Route::post('wallet/paystack/webhook', [WalletController::class, 'handlePaystackWebhook']);
+Route::post('wallet/paystack/webhook', [WalletController::class, 'handleWebhook']);
 // verify transaction status
 Route::get('wallet/paystack/webhook', [WalletController::class, 'verifyPayment']);
