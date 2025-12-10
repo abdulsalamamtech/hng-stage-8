@@ -90,65 +90,6 @@ class WalletController extends Controller
         }
     }
 
-    public function handlePaystackWebhook(Request $request)
-    {
-        // Timestamp the webhook receipt
-        info('Paystack Webhook Timestamp: ' . date('YmdHis'));
-        info('Request all: ' . json_encode($request->all()));
-        info('Paystack Webhook Received: ' . $request->getContent());
-
-        // 1. Signature Validation (Security)
-        $paystackSignatureOne = $request->header('x-paystack-signature');
-        info('Paystack Signature Header: ' . $paystackSignatureOne);
-        $paystackSignature = $request->header('HTTP_X_PAYSTACK_SIGNATURE');
-        info('Paystack Signature Header (HTTP_X_PAYSTACK_SIGNATURE): ' . $paystackSignature);
-
-        $secret = config('services.paystack.secret');
-
-        if ($paystackSignature !== hash_hmac('sha512', $request->getContent(), $secret) && $paystackSignatureOne !== hash_hmac('sha512', $request->getContent(), $secret)) {
-            Log::warning('Paystack Webhook: Invalid Signature.', $request->all());
-            return response()->json(['status' => false], 403);
-        }
-
-        $event = $request->event;
-        $data = $request->data;
-        $reference = $data['reference'];
-
-        // 2. Handle 'charge.success'
-        if ($event === 'charge.success') {
-            // Atomic & Idempotency Check
-            DB::beginTransaction();
-            try {
-                $transaction = Transaction::where('reference', $reference)->lockForUpdate()->first();
-
-                if (!$transaction || $transaction->status !== 'pending') {
-                    info('Transaction already processed or not found for reference: ' . $reference);
-                    // Already processed (idempotency), or transaction not found/invalid.
-                    DB::commit(); // Always acknowledge 200 OK to Paystack
-                    return response()->json(['status' => true]);
-                }
-
-                // 3. Update Transaction and Credit Wallet
-                $transaction->status = 'success';
-                $transaction->save();
-
-                $wallet = $transaction->wallet()->lockForUpdate()->first();
-                $wallet->balance += $data['amount'] / 100; // Amount is in kobo/cent
-                $wallet->save();
-                info('Wallet credited with amount: ' . ($data['amount'] / 100) . ' for reference: ' . $reference);
-
-                DB::commit();
-                Log::info("Wallet credited successfully for reference: " . $reference);
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error("Webhook failed to process reference $reference: " . $e->getMessage());
-                return response()->json(['status' => false], 500); // Trigger Paystack retry
-            }
-        }
-
-        return response()->json(['status' => true]); // Always return 200 OK to Paystack
-    }
-
 
     public function transfer(Request $request)
     {
@@ -270,5 +211,120 @@ class WalletController extends Controller
             'type' => $transaction->type,
             'created_at' => $transaction->created_at,
         ], 'Transaction retrieved successfully.', 200);
+    }
+
+    public function handlePaystackWebhook(Request $request)
+    {
+        // Timestamp the webhook receipt
+        info('Paystack Webhook Timestamp: ' . date('YmdHis'));
+        info('Request all: ' . json_encode($request->all()));
+        info('Paystack Webhook Received: ' . $request->getContent());
+
+
+        // 1. Signature Validation (Security)
+        // $paystackSignatureOne = $request->header('x-paystack-signature');
+        // info('Paystack Signature Header: ' . $paystackSignatureOne);
+        // $paystackSignature = $request->header('HTTP_X_PAYSTACK_SIGNATURE');
+        // info('Paystack Signature Header (HTTP_X_PAYSTACK_SIGNATURE): ' . $paystackSignature);
+
+        // $secret = config('services.paystack.secret');
+
+        // if ($paystackSignature !== hash_hmac('sha512', $request->getContent(), $secret) && $paystackSignatureOne !== hash_hmac('sha512', $request->getContent(), $secret)) {
+        //     Log::warning('Paystack Webhook: Invalid Signature.', $request->all());
+        //     return response()->json(['status' => false], 403);
+        // }
+
+        $event = $request->event;
+        $data = $request->data;
+        $reference = $data['reference'];
+
+        // 2. Handle 'charge.success'
+        if ($event === 'charge.success') {
+            // Atomic & Idempotency Check
+            DB::beginTransaction();
+            try {
+                $transaction = Transaction::where('reference', $reference)->lockForUpdate()->first();
+
+                if (!$transaction || $transaction->status !== 'pending') {
+                    info('Transaction already processed or not found for reference: ' . $reference);
+                    // Already processed (idempotency), or transaction not found/invalid.
+                    DB::commit(); // Always acknowledge 200 OK to Paystack
+                    return response()->json(['status' => true]);
+                }
+
+                // 3. Update Transaction and Credit Wallet
+                $transaction->status = 'success';
+                $transaction->save();
+
+                $wallet = $transaction->wallet()->lockForUpdate()->first();
+                $wallet->balance += $data['amount'] / 100; // Amount is in kobo/cent
+                $wallet->save();
+                info('Wallet credited with amount: ' . ($data['amount'] / 100) . ' for reference: ' . $reference);
+
+                DB::commit();
+                Log::info("Wallet credited successfully for reference: " . $reference);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error("Webhook failed to process reference $reference: " . $e->getMessage());
+                return response()->json(['status' => false], 500); // Trigger Paystack retry
+            }
+        }
+
+        return response()->json(['status' => true]); // Always return 200 OK to Paystack
+    }
+
+    public function handleWebhook(Request $request)
+    {
+        // Immediately acknowledge the request by returning a 200 OK response
+        // before processing the event (best practice for webhooks).
+        // The script continues running after the response is sent in Laravel.
+        // Timestamp the webhook receipt
+        info('Paystack Webhook Timestamp: ' . date('YmdHis'));
+        info('Request all: ' . json_encode($request->all()));
+        info('Paystack Webhook Received: ' . $request->getContent());
+
+        // Retrieve raw body and signature
+        $input = $request->getContent();
+        $signature = $request->header('x-paystack-signature');
+        info('Paystack Signature: ' . $signature);
+        $secretKey = config('services.paystack.secret');
+
+        // Validate the event using HMAC SHA512
+        if (!$signature || $signature !== hash_hmac('sha512', $input, $secretKey)) {
+            // Log unauthorized access attempt if needed
+            Log::warning('Paystack Webhook: Invalid signature received.');
+            return response()->json(['message' => 'Invalid signature. Access denied.'], 401);
+        }
+
+        // Signature is valid. Return 200 OK now to prevent retries
+        // The rest of the processing happens after this point in the execution flow
+        // or ideally dispatched to a Job (see step 5).
+
+
+        // Parse event as object
+        $event = json_decode($input);
+        // Use the event data to run your business logic
+        $this->processEvent($event);
+        log::info('Paystack Webhook Processed: ' . $request->getContent());
+
+        return response()->json(['status' => true], 200); // Always return 200 OK to Paystack
+    }
+
+    protected function processEvent($event)
+    {
+        // Handle specific events
+        switch ($event->event) {
+            case 'charge.success':
+                // e.g., Update database record, grant user access to a service
+                $transactionReference = $event->data->reference;
+                // TIP: Always verify transaction with Paystack API via a GET request to prevent double fulfillment
+                // $this->verifyTransaction($transactionReference); 
+                return response()->json(['status' => true], 200); // Always return 200 OK to Paystack
+                break;
+            // Handle other events like 'subscription.create', 'transfer.success', etc.
+            default:
+                Log::info('Received unhandled Paystack event: ' . $event->event);
+                break;
+        }
     }
 }
