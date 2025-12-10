@@ -319,6 +319,15 @@ class WalletController extends Controller
                 $transactionReference = $event->data->reference;
                 // TIP: Always verify transaction with Paystack API via a GET request to prevent double fulfillment
                 // $this->verifyTransaction($transactionReference); 
+                $this->verifyDepositStatus($transactionReference);
+                // 2. Create a new Request object with the necessary data
+                $newRequest = new Request();
+                // Then we use the replace() method to set the entire input payload.
+                $newRequest->replace(['reference' => $transactionReference]);
+                // 3. Call the target controller method, passing the new Request object
+                return $this->verifyPayment($transactionReference);
+
+                info('Processed charge.success for reference: ' . $transactionReference);
                 return response()->json(['status' => true], 200); // Always return 200 OK to Paystack
                 break;
             // Handle other events like 'subscription.create', 'transfer.success', etc.
