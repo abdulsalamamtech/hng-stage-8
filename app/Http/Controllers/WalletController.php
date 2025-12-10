@@ -23,7 +23,7 @@ class WalletController extends Controller
         $data = $request->validate([
             'amount' => 'required|numeric|min:100', // Minimum deposit of 100 units
         ]);
-        $amountInKobo = $data['amount'] * 100;
+        $amountInKobo = $data['amount']; // it will be converted to kobo in Paystack class
         $reference = Str::random(12);
         $user = $request->user();
 
@@ -165,7 +165,8 @@ class WalletController extends Controller
 
         info('Paystack Verification Response: ' . json_encode($PSP));
 
-        $transaction->status = $PSP['data']['status'];
+        // This should use webhook
+        // $transaction->status = $PSP['data']['status'];
         $transaction->save();
 
         $response = [
