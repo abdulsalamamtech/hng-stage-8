@@ -30,14 +30,20 @@ Route::prefix('auth')->group(function () {
     Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:api');
 });
 
-// 2. API Key Management (Protected by JWT, used by a User)
-Route::middleware('auth:api')->prefix('keys')->group(function () {
-    Route::post('create', [KeyController::class, 'create']);
-    Route::delete('{tokenId}/revoke', [KeyController::class, 'revoke']);
+// key 
+Route::prefix('keys')->middleware(['auth:api'])->controller(KeyController::class)->group(function () {
+    Route::post('/', 'createKey')->middleware('auth:api'); // Create API Key (Protected by JWT)
+    Route::get('/', 'listKeys')->middleware('auth:api'); // List API Keys (Protected by JWT)
+    Route::delete('/{keyId}', 'revokeKey')->middleware('auth:api'); // Revoke API Key (Protected by JWT)
+        Route::post('create', 'create');
+        // rollback permission checks for API keys
+        Route::get('/', 'list')->middleware('can:read');
+        Route::delete('/{tokenId}revoke', 'revoke');
 });
 
-// 3. Protected Routes
 
+
+// 3. Protected Routes
 // a) User-only access (Protected by JWT)
 Route::middleware('auth:api')->get('/user-resource', function (Request $request) {
     return response()->json([
@@ -75,17 +81,10 @@ Route::controller(AuthController::class)->prefix('auth')->group(function () {
 });
 
 // 2. Paystack Webhook (No standard auth, uses signature validation)
-Route::post('wallet/paystack/webhook', [WalletController::class, 'handlePaystackWebhook']);
+// Route::post('wallet/paystack/webhook', [WalletController::class, 'handlePaystackWebhook']);
 
 // 3. Protected Routes (Use auth:sanctum which handles both JWT and API Key)
-Route::middleware(['auth:api'])->group(function () {
-
-    // API Key Management (User access only - implied by auth:sanctum user model)
-    Route::prefix('keys')->controller(KeyController::class)->group(function () {
-        Route::post('create', 'create');
-        Route::post('rollover', 'rollover'); // Implement logic in controller
-        Route::delete('{tokenId}/revoke', 'revoke'); // Implement logic in controller
-    });
+Route::middleware(['auth:api', 'auth.api_or_sanctum'])->group(function () {
 
     // Wallet Endpoints (Requires permission checks for API keys)
     Route::controller(WalletController::class)->prefix('wallet')->group(function () {
@@ -113,3 +112,13 @@ Route::middleware(['auth:api'])->group(function () {
 Route::post('wallet/paystack/webhook', [WalletController::class, 'handleWebhook']);
 // verify transaction status
 Route::get('wallet/paystack/webhook', [WalletController::class, 'verifyPayment']);
+
+
+// Route::middleware(['auth.api_or_sanctum'])->get('/both', function () {
+Route::middleware(['auth:sanctum', 'can:read'])->get('/both', function () {
+
+    return response()->json([
+        'message' => 'Accessed with API Key or JWT',
+        'user' => request()->user(),
+    ]);
+});
