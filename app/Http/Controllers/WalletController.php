@@ -105,7 +105,7 @@ class WalletController extends Controller
 
         $secret = config('services.paystack.secret');
 
-        if ($paystackSignature !== hash_hmac('sha512', $request->getContent(), $secret) || $paystackSignatureOne !== hash_hmac('sha512', $request->getContent(), $secret)) {
+        if ($paystackSignature !== hash_hmac('sha512', $request->getContent(), $secret) && $paystackSignatureOne !== hash_hmac('sha512', $request->getContent(), $secret)) {
             Log::warning('Paystack Webhook: Invalid Signature.', $request->all());
             return response()->json(['status' => false], 403);
         }
