@@ -33,15 +33,11 @@ jobs:
             # php artisan migrate:fresh --force # Migrate the database
             php artisan db:seed # Seed the database
             php artisan optimize:clear  # Clear the optimization
-            php artisan filament:optimize-clear # Clear Filament optimizations
-            php artisan filament:clear-cached-components
-            php artisan filament:clear
 
             php artisan cache:clear  # Clear the cache
             php artisan view:clear  # Clear the view cache
             php artisan route:clear  # Clear the route cache
             php artisan optimize  # Optimize the app
-            # php artisan filament:optimize # Optimize Filament
             npm install  # Install dependencies
             npm run build  # Build the Node app
 
