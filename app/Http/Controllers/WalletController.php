@@ -92,16 +92,20 @@ class WalletController extends Controller
 
     public function handlePaystackWebhook(Request $request)
     {
-
+        // Timestamp the webhook receipt
+        info('Paystack Webhook Timestamp: ' . now()->toDateTimeString());
+        info('Request all: ' . json_encode($request->all()));
         info('Paystack Webhook Received: ' . $request->getContent());
 
         // 1. Signature Validation (Security)
-        // $paystackSignature = $request->header('x-paystack-signature');
+        $paystackSignatureOne = $request->header('x-paystack-signature');
+        info('Paystack Signature Header: ' . $paystackSignatureOne);
         $paystackSignature = $request->header('HTTP_X_PAYSTACK_SIGNATURE');
+        info('Paystack Signature Header (HTTP_X_PAYSTACK_SIGNATURE): ' . $paystackSignature);
 
         $secret = config('services.paystack.secret');
 
-        if ($paystackSignature !== hash_hmac('sha512', $request->getContent(), $secret)) {
+        if ($paystackSignature !== hash_hmac('sha512', $request->getContent(), $secret) || $paystackSignatureOne !== hash_hmac('sha512', $request->getContent(), $secret)) {
             Log::warning('Paystack Webhook: Invalid Signature.', $request->all());
             return response()->json(['status' => false], 403);
         }
