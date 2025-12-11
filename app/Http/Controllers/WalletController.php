@@ -184,13 +184,23 @@ class WalletController extends Controller
 
 
     // Verify deposit status
-    public function verifyPayment(Request $request)
+    public function verifyPaymentStatus(Request $request)
     {
         $data = $request->validate([
             'reference' => 'required|string',
         ]);
 
-        $reference = $data['reference'];
+        return $this->verifyPayment($data['reference']);
+    }
+
+
+    // Verify deposit from Paystack
+    public function verifyPayment(string $reference)
+    {
+        if (!$reference) {
+            return ApiResponse::error([], 'Reference is required.', 400);
+        }
+
         $transaction = Transaction::where('reference', $reference)->first();
 
         if (!$transaction) {
@@ -218,6 +228,8 @@ class WalletController extends Controller
 
         return ApiResponse::success($response, 'Transaction retrieved successfully.', 200);
     }
+
+
 
 
     // Get transaction
@@ -354,13 +366,13 @@ class WalletController extends Controller
                 $transactionReference = $event->data->reference;
                 // TIP: Always verify transaction with Paystack API via a GET request to prevent double fulfillment
                 // $this->verifyTransaction($transactionReference); 
-                $this->verifyDepositStatus($transactionReference);
+                $this->verifyPayment($transactionReference);
                 // 2. Create a new Request object with the necessary data
                 $newRequest = new Request();
                 // Then we use the replace() method to set the entire input payload.
                 $newRequest->replace(['reference' => $transactionReference]);
                 // 3. Call the target controller method, passing the new Request object
-                return $this->verifyPayment($transactionReference);
+                return $this->verifyPaymentStatus($newRequest);
 
                 info('Processed charge.success for reference: ' . $transactionReference);
                 return response()->json(['status' => true], 200); // Always return 200 OK to Paystack
