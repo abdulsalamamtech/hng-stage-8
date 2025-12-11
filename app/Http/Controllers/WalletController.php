@@ -198,12 +198,14 @@ class WalletController extends Controller
     public function verifyPayment(string $reference)
     {
         if (!$reference) {
+            Log::warning('Verification attempt without reference.');
             return ApiResponse::error([], 'Reference is required.', 400);
         }
 
         $transaction = Transaction::where('reference', $reference)->first();
 
         if (!$transaction) {
+            Log::warning('Transaction not found for reference: ' . $reference);
             return ApiResponse::error([], 'Transaction not found.', 404);
         }
 
@@ -215,7 +217,7 @@ class WalletController extends Controller
         info('Paystack Verification Response: ' . json_encode($PSP));
 
         // This should use webhook
-        // $transaction->status = $PSP['data']['status'];
+        $transaction->status = $PSP['data']['status'];
         $transaction->save();
 
         $response = [
@@ -228,8 +230,6 @@ class WalletController extends Controller
 
         return ApiResponse::success($response, 'Transaction retrieved successfully.', 200);
     }
-
-
 
 
     // Get transaction
@@ -368,11 +368,11 @@ class WalletController extends Controller
                 // $this->verifyTransaction($transactionReference); 
                 $this->verifyPayment($transactionReference);
                 // 2. Create a new Request object with the necessary data
-                $newRequest = new Request();
-                // Then we use the replace() method to set the entire input payload.
-                $newRequest->replace(['reference' => $transactionReference]);
-                // 3. Call the target controller method, passing the new Request object
-                return $this->verifyPaymentStatus($newRequest);
+                // $newRequest = new Request();
+                // // Then we use the replace() method to set the entire input payload.
+                // $newRequest->replace(['reference' => $transactionReference]);
+                // // 3. Call the target controller method, passing the new Request object
+                // return $this->verifyPaymentStatus($newRequest);
 
                 info('Processed charge.success for reference: ' . $transactionReference);
                 return response()->json(['status' => true], 200); // Always return 200 OK to Paystack
