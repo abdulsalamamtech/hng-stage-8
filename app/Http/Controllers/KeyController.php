@@ -9,11 +9,35 @@ use function Laravel\Prompts\info;
 class KeyController extends Controller
 {
 
+    // listKeys
+    public function listKeys(Request $request)
+    {
+        $user = $request->user();
+
+        $tokens = $user->tokens()->get()->map(function ($token) {
+            return [
+                'id' => $token->id,
+                'name' => $token->name,
+                'token' => $token->token,
+                'abilities' => $token->abilities,
+                'last_used_at' => $token->last_used_at,
+                'expires_at' => $token->expires_at,
+                'created_at' => $token->created_at,
+            ];
+        });
+
+        info('listKeys called by user id: ' . $user->id);
+        return response()->json([
+            "success" => true,
+            'message' => 'List Keys called',
+            'data' => $tokens
+        ]);
+    }
 
     // Revoke a specific API key
     public function revoke(Request $request, $tokenId)
     {
-
+        info('Revoke called for token id: ' . $tokenId . ' by user id: ' . $request->user()->id);
         // Find the token belonging to the authenticated user
         $result = $request->user()->tokens()
             ->where('id', $tokenId)
@@ -51,16 +75,12 @@ class KeyController extends Controller
 
         // 2. Permission and Expiry Parsing (simplified)
         $permissions = $request->input('permissions', [
-            'read',
+            'read', // balance access by default
             'deposit',
             'transfer',
-            'balance',
+            'balance', // same as read
             'withdraw',
         ]);
-        // $permissions = [];
-        // foreach ($per as $p) {
-        //     $permissions[] = "service:$p";
-        // }
 
         info('permissions: ' . json_encode($permissions));
 

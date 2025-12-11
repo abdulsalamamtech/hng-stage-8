@@ -7,6 +7,7 @@ use App\Helpers\Paystack;
 use App\Models\Transaction;
 use App\Models\Wallet;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
@@ -17,8 +18,17 @@ use function Symfony\Component\Clock\now;
 
 class WalletController extends Controller
 {
+    // Deposit funds into wallet ["deposit", "transfer", "read"],
     public function deposit(Request $request)
     {
+        // check if the request doesn't use jwt or api key before proceeding
+        if (Auth::guard('sanctum')->check() && auth('sanctum')?->user()?->tokenCant('deposit')) {
+            Log::warning('Unauthorized deposit attempt by user ID: ' . $request?->user()?->id);
+            return response()->json([
+                'success' => false,
+                'message' => 'You lack the required permission to perform this action.',
+            ]);
+        }
 
         $data = $request->validate([
             'amount' => 'required|numeric|min:100', // Minimum deposit of 100 units
@@ -91,8 +101,18 @@ class WalletController extends Controller
     }
 
 
+    // Transfer to another wallet
     public function transfer(Request $request)
     {
+        // check if the request doesn't use jwt or api key before proceeding
+        if (Auth::guard('sanctum')->check() && auth('sanctum')?->user()?->tokenCant('transfer')) {
+            Log::warning('Unauthorized transfer attempt by user ID: ' . $request?->user()?->id);
+            return response()->json([
+                'success' => false,
+                'message' => 'You lack the required permission to perform this action.',
+            ]);
+        }
+
         // ... validation for amount and wallet_number ...
         $data = $request->validate([
             'amount' => 'required|numeric|min:10', // Minimum transfer of 100 units
@@ -144,7 +164,26 @@ class WalletController extends Controller
     }
 
 
-    // verify deposit status
+    // Check balance
+    public function getBalance(Request $request)
+    {
+        // check if the request doesn't use jwt or api key before proceeding
+        if (Auth::guard('sanctum')->check() && auth('sanctum')?->user()?->tokenCant('read')) {
+            Log::warning('Unauthorized read balance attempt by user ID: ' . $request?->user()?->id);
+            return response()->json([
+                'success' => false,
+                'message' => 'You lack the required permission to perform this action.',
+            ]);
+        }
+        $wallet = $request->user()->wallet;
+        return ApiResponse::success([
+            'balance' => $wallet->balance,
+            'currency' => 'NGN', // Assuming NGN, adjust as needed
+        ], 'Wallet balance retrieved successfully.', 200);
+    }
+
+
+    // Verify deposit status
     public function verifyPayment(Request $request)
     {
         $data = $request->validate([
@@ -181,15 +220,7 @@ class WalletController extends Controller
     }
 
 
-    public function getBalance(Request $request)
-    {
-        $wallet = $request->user()->wallet;
-        return ApiResponse::success([
-            'balance' => $wallet->balance,
-            'currency' => 'NGN', // Assuming NGN, adjust as needed
-        ], 'Wallet balance retrieved successfully.', 200);
-    }
-
+    // Get transaction
     public function getTransactions(Request $request)
     {
         $wallet = $request->user()->wallet;
@@ -213,6 +244,7 @@ class WalletController extends Controller
             'created_at' => $transaction->created_at,
         ], 'Transaction retrieved successfully.', 200);
     }
+
 
     public function handlePaystackWebhook(Request $request)
     {
@@ -274,6 +306,7 @@ class WalletController extends Controller
         return response()->json(['status' => true]); // Always return 200 OK to Paystack
     }
 
+
     public function handleWebhook(Request $request)
     {
         // Immediately acknowledge the request by returning a 200 OK response
@@ -310,6 +343,7 @@ class WalletController extends Controller
 
         return response()->json(['status' => true], 200); // Always return 200 OK to Paystack
     }
+
 
     protected function processEvent($event)
     {
