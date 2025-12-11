@@ -66,7 +66,7 @@ class WalletController extends Controller
 
             if ($PSP['success']) {
                 // 1. Record pending transaction for idempotency
-                $user->wallet->transactions()->create([
+                $user?->wallet?->transactions()?->create([
                     'type' => 'deposit',
                     'amount' => $data['amount'],
                     'reference' => $PSP['reference'],
@@ -236,7 +236,7 @@ class WalletController extends Controller
     public function getTransactions(Request $request)
     {
         $wallet = $request->user()->wallet;
-        $transactions = $wallet->transactions()->orderBy('created_at', 'desc')->get();
+        $transactions = $wallet?->transactions()?->orderBy('created_at', 'desc')->get();
 
         return ApiResponse::success($transactions, 'Transaction history retrieved successfully.', 200);
     }
