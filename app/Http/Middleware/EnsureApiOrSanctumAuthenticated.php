@@ -20,6 +20,8 @@ class EnsureApiOrSanctumAuthenticated
         // Try authenticating with sanctum first
         // If sanctum fails, try authenticating with the 'api' guard
         if (Auth::guard('sanctum')->check() || Auth::guard('api')->check()) {
+            $user = Auth::guard('sanctum')->user() ?? Auth::guard('api')->user();
+            Auth::login($user);
             return $next($request);
         }
 
@@ -27,7 +29,7 @@ class EnsureApiOrSanctumAuthenticated
         return response()->json([
             'success' => false,
             'message' => 'Unauthenticated.'
-        ], 401);        
+        ], 401);
         // return $next($request);
     }
 }
