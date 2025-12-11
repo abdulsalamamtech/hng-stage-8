@@ -8,6 +8,8 @@ use App\Http\Controllers\KeyController;
 
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\ApiKeyController;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 Route::get('/user', function (Request $request) {
     return response()->json([
@@ -22,23 +24,19 @@ Route::get('/user', function (Request $request) {
 
 
 // 1. User Authentication (JWT)
-Route::prefix('auth')->group(function () {
-    // public routes
-    Route::post('signup', [AuthController::class, 'signup']);
-    Route::post('login', [AuthController::class, 'login']);
-    // Protected by the JWT guard
-    Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:api');
-});
+// Route::prefix('auth')->group(function () {
+//     // public routes
+//     Route::post('signup', [AuthController::class, 'signup']);
+//     Route::post('login', [AuthController::class, 'login']);
+//     // Protected by the JWT guard
+//     Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:api');
+// });
 
 // key 
 Route::prefix('keys')->middleware(['auth:api'])->controller(KeyController::class)->group(function () {
-    Route::post('/', 'createKey')->middleware('auth:api'); // Create API Key (Protected by JWT)
-    Route::get('/', 'listKeys')->middleware('auth:api'); // List API Keys (Protected by JWT)
-    Route::delete('/{keyId}', 'revokeKey')->middleware('auth:api'); // Revoke API Key (Protected by JWT)
-        Route::post('create', 'create');
-        // rollback permission checks for API keys
-        Route::get('/', 'list')->middleware('can:read');
-        Route::delete('/{tokenId}revoke', 'revoke');
+    Route::get('/', 'listKeys'); // List API Keys (Protected by JWT)
+    Route::delete('/{tokenId}/revoke', 'revoke');
+    Route::post('create', 'create');
 });
 
 
@@ -53,6 +51,7 @@ Route::middleware('auth:api')->get('/user-resource', function (Request $request)
 
     ]);
 });
+
 
 // b) Service-to-Service access (Protected by Sanctum/API Key)
 Route::middleware('auth:sanctum')->get('/service-resource', function (Request $request) {
@@ -72,8 +71,6 @@ Route::middleware('auth:sanctum')->get('/service-resource', function (Request $r
 });
 
 
-
-
 // 1. Google Auth (No middleware needed)
 Route::controller(AuthController::class)->prefix('auth')->group(function () {
     Route::get('google', 'redirectToGoogle');
@@ -84,7 +81,7 @@ Route::controller(AuthController::class)->prefix('auth')->group(function () {
 // Route::post('wallet/paystack/webhook', [WalletController::class, 'handlePaystackWebhook']);
 
 // 3. Protected Routes (Use auth:sanctum which handles both JWT and API Key)
-Route::middleware(['auth:api', 'auth.api_or_sanctum'])->group(function () {
+Route::middleware(['auth.api_or_sanctum'])->group(function () {
 
     // Wallet Endpoints (Requires permission checks for API keys)
     Route::controller(WalletController::class)->prefix('wallet')->group(function () {
@@ -114,11 +111,31 @@ Route::post('wallet/paystack/webhook', [WalletController::class, 'handleWebhook'
 Route::get('wallet/paystack/webhook', [WalletController::class, 'verifyPayment']);
 
 
-// Route::middleware(['auth.api_or_sanctum'])->get('/both', function () {
-Route::middleware(['auth:sanctum', 'can:read'])->get('/both', function () {
+Route::middleware(['auth.api_or_sanctum'])->get('/both', function (Request $request) {
+    // Route::middleware(['auth:sanctum'])->get('/both', function (Request $request) {
+
+    // $user = Auth::guard('sanctum')->user() ?? Auth::guard('api')->user();
+    $user = $request->user();
+
+    // check if the request doesn't use jwt or api key before proceeding
+    if (Auth::guard('sanctum')->check() && auth('sanctum')?->user()?->tokenCant('read')) {
+        Log::warning('Unauthorized read attempt by user ID: ' . $request?->user()?->id);
+        return response()->json([
+            'success' => false,
+            'message' => 'You lack the required permission to perform this action.',
+        ]);
+    } else {
+        Log::info('Authorized read access by user ID: ' . $request?->user()?->id);
+        // proceed with jwt user
+        return response()->json([
+            'message' => 'Accessed with JWT',
+            'user' => $user,
+        ]);
+    }
+
 
     return response()->json([
         'message' => 'Accessed with API Key or JWT',
-        'user' => request()->user(),
+        'user' => $user,
     ]);
 });
